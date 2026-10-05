@@ -1,0 +1,2086 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PNGanimatic v-2</title>
+    <style>
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.15);
+            --glass-border: rgba(255, 255, 255, 0.25);
+            --text-color: #ffffff;
+            --move-color: #ff4a4a;
+            --rotate-color: #4aff75;
+            --scale-color: #4a9eff;
+            --mod-color: #ffd74a;
+            --twofinger-color: #ff9a4a;
+            --origin-color: #ff4aec;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            background-color: #1a1a1a;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            touch-action: none;
+            color: var(--text-color);
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        input, textarea {
+            -webkit-user-select: auto;
+            -moz-user-select: auto;
+            -ms-user-select: auto;
+            user-select: auto;
+        }
+
+        body, button, input, span, h3 {
+            color: white;
+            text-shadow: 
+                -1px -1px 0 #000,  
+                 1px -1px 0 #000,
+                -1px  1px 0 #000,
+                 1px  1px 0 #000,
+                 0px  2px 4px rgba(0,0,0,0.8);
+        }
+
+        canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;
+        }
+
+        .ui-layer {
+            position: absolute; z-index: 10; transition: opacity 0.3s ease;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .playing .ui-layer:not(#top-grid) {
+            opacity: 0 !important; pointer-events: none !important;
+        }
+        
+        .playing #top-grid.visible {
+            opacity: 0.7 !important; pointer-events: all !important;
+        }
+
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border); border-radius: 16px;
+        }
+
+        #toolbar {
+            top: 20%; left: 10px; display: flex; flex-direction: column; gap: 12px; padding: 10px;
+        }
+
+        .tool-btn {
+            position: relative;
+            width: 48px; height: 48px; border-radius: 50%; border: none;
+            background: rgba(255, 255, 255, 0.15); font-weight: bold; 
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; transition: background 0.2s, box-shadow 0.2s;
+            -webkit-user-select: none;
+            user-select: none;
+            cursor: pointer;
+        }
+
+        .tool-btn.active-move { background: var(--move-color); box-shadow: 0 0 15px var(--move-color); text-shadow: none; color: black; }
+        .tool-btn.active-rotate { background: var(--rotate-color); box-shadow: 0 0 15px var(--rotate-color); text-shadow: none; color: black; }
+        .tool-btn.active-scale { background: var(--scale-color); box-shadow: 0 0 15px var(--scale-color); text-shadow: none; color: black; }
+
+        .toolbar-item-wrap { position: relative; }
+        #extra-menu-wrap {
+            top: 90px; left: 5%;
+        }
+        #extra-flyout {
+            position: absolute; left: 58px; top: 0; display: flex; flex-direction: row; gap: 8px;
+            opacity: 0; pointer-events: none; transform: translateX(-8px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        #extra-flyout.open { opacity: 1; pointer-events: all; transform: translateX(0); }
+        #extra-flyout .tool-btn { width: 42px; height: 42px; font-size: 14px; }
+        #btn-two-finger.active-2f { background: var(--twofinger-color); box-shadow: 0 0 15px var(--twofinger-color); text-shadow: none; color: black; }
+        #btn-set-origin.active-origin { background: var(--origin-color); box-shadow: 0 0 15px var(--origin-color); text-shadow: none; color: black; }
+        #btn-pivot-mode.active-pivot { background: var(--origin-color); box-shadow: 0 0 15px var(--origin-color); text-shadow: none; color: black; }
+        body.setting-origin-mode canvas { cursor: crosshair; }
+        
+        #btn-mod {
+            width: 56px; height: 56px; background: rgba(255, 255, 255, 0.2);
+            border: 2px solid var(--mod-color); margin-top: 10px; font-size: 24px;
+        }
+        #btn-mod.active { background: var(--mod-color); text-shadow: none; color: black; }
+
+        #bottom-bar {
+            bottom: 20px; left: 5%; width: 90%; height: 60px;
+            display: flex; align-items: center; padding: 0 15px; box-sizing: border-box; gap: 10px;
+        }
+
+        #btn-play {
+            width: 40px; height: 40px; background: none; border: none; font-size: 24px; cursor: pointer; padding: 0;
+            user-select: none; -webkit-user-select: none;
+        }
+
+        #timeline-container {
+            flex-grow: 1; position: relative; height: 40px; display: flex; align-items: center;
+            cursor: pointer; touch-action: none;
+        }
+        
+        #keys-canvas {
+            position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+            width: 100%; height: 44px; background: rgba(0,0,0,0.5);
+            border-radius: 6px; pointer-events: none; z-index: 1;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        #timeline-playhead {
+            position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+            width: 4px; height: 52px; background: white; border: 1px solid black; border-radius: 2px;
+            box-shadow: 0 0 4px rgba(0,0,0,0.8); pointer-events: none; z-index: 2;
+        }
+
+        #btn-settings {
+            background: none; border: none; font-size: 14px; text-align: center; line-height: 1.2; padding: 0;
+            user-select: none; -webkit-user-select: none; cursor: pointer;
+        }
+
+        #top-grid {
+            top: 10px; left: 5%; width: 90%; display: flex; gap: 10px; overflow-x: auto;
+            padding: 10px; box-sizing: border-box; opacity: 0; pointer-events: none;
+        }
+        #top-grid.visible { opacity: 1; pointer-events: all; }
+        .grid-item-wrap { position: relative; width: 50px; height: 50px; flex-shrink: 0; }
+        .grid-item {
+            width: 50px; height: 50px; object-fit: contain; background: rgba(0,0,0,0.3);
+            border-radius: 8px; border: 2px solid transparent; display: block;
+            user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
+            -webkit-user-drag: none; -khtml-user-drag: none; -moz-user-drag: none; -o-user-drag: none; user-drag: none;
+            -webkit-touch-callout: none;
+            cursor: pointer;
+        }
+        .grid-item.active { border-color: white; }
+        .grid-item.paired { border-color: var(--mod-color); }
+        .pair-badge {
+            position: absolute; top: -5px; right: -5px; width: 15px; height: 15px;
+            background: var(--mod-color); color: #000; font-size: 10px; line-height: 15px;
+            text-align: center; border-radius: 50%; pointer-events: none; text-shadow: none; font-weight: bold;
+        }
+
+        #modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 99; background: transparent;
+        }
+        #modal-overlay.show { display: block; }
+
+        #settings-modal {
+            display: none; position: absolute; bottom: 78px; left: 50%; transform: translateX(-50%);
+            width: 85%; max-width: 340px; padding: 10px 12px; flex-direction: column; gap: 5px; z-index: 100;
+            max-height: 75vh; overflow-y: auto;
+        }
+        #settings-modal.show { display: flex; }
+        #settings-modal h3 { margin: 0 0 2px 0; font-size: 15px; text-align: center; }
+
+        .setting-row { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; flex-wrap: wrap; row-gap: 4px; column-gap: 8px; padding: 2px 0; }
+        .setting-row input[type="text"], .setting-row input[type="number"] { 
+            width: 56px; background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 4px; border-radius: 4px; text-align: center;
+        }
+        
+        .setting-row input[type="range"] { 
+            -webkit-appearance: none; width: 185px; max-width: 100%; height: 14px; background: rgba(255,255,255,0.3); border-radius: 7px; border: 1px solid black;
+        }
+        .setting-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 22px; height: 22px; background: white; border-radius: 50%; border: 2px solid black; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        
+        .action-btn { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2); padding: 7px; border-radius: 8px; font-size: 12.5px; width: 100%; margin-top: 1px; user-select: none; -webkit-user-select: none; cursor: pointer; transition: background 0.2s; text-align: center; }
+        .action-btn:hover { background: rgba(255,255,255,0.2); }
+        #settings-actions-grid {
+            display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, auto);
+            grid-auto-flow: column; gap: 6px; margin-top: 4px;
+        }
+        #settings-actions-grid .action-btn { margin-top: 0; }
+
+        .duration-group { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+        .duration-group input[type="number"] { width: 40px !important; }
+        .duration-unit { font-size: 11px; opacity: 0.8; }
+        #duration-sync-hint { font-size: 11px; opacity: 0.75; text-align: center; width: 100%; justify-content: center; display: none; }
+        #duration-sync-hint.show { display: flex; }
+
+        #stop-zone {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 90px;
+            background: transparent; z-index: 99999; display: none;
+        }
+        .playing #stop-zone { display: block; }
+
+        #toast-msg {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 10000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        #toast-msg.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+    
+    <div id="stop-zone"></div>
+    <div id="toast-msg"></div>
+
+    <div id="top-grid" class="ui-layer glass"></div>
+
+    <div id="extra-menu-wrap" class="ui-layer">
+        <div class="toolbar-item-wrap">
+            <button class="tool-btn" id="btn-extra-menu" title="Доп. меню">&gt;</button>
+            <div id="extra-flyout">
+                <button class="tool-btn" id="btn-z-up" title="Слой выше">Z↑</button>
+                <button class="tool-btn" id="btn-z-down" title="Слой ниже">Z↓</button>
+                <button class="tool-btn" id="btn-merge-frame" title="Второй объект → в кадр первого">⧉</button>
+                <button class="tool-btn" id="btn-two-finger" title="Перемещение двумя пальцами">✌️</button>
+                <button class="tool-btn" id="btn-set-origin" title="Задать ориджин (ось вращения/масштаба)">⊕</button>
+                <button class="tool-btn" id="btn-pivot-mode" title="Ориджин первого выделенного объекта">⊕⊕</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toolbar" class="ui-layer">
+        <button class="tool-btn" id="btn-move" title="Движение">✥</button>
+        <button class="tool-btn" id="btn-rotate" title="Вращение">↻</button>
+        <button class="tool-btn" id="btn-scale" title="Масштаб">⤢</button>
+        <button class="tool-btn" id="btn-mod" title="Универсальная  кнопка (шифт)">ツ</button>
+    </div>
+
+    <div id="bottom-bar" class="ui-layer glass">
+        <button id="btn-play">▶</button>
+        <div id="timeline-container">
+            <canvas id="keys-canvas"></canvas>
+            <div id="timeline-playhead"></div>
+        </div>
+        <button id="btn-settings">⚙️<br><span id="time-display">00:00</span></button>
+    </div>
+
+    <div id="modal-overlay"></div>
+
+    <div id="settings-modal" class="glass ui-layer">
+        <h3>Настройки</h3>
+        <div class="setting-row">
+            <span>Длительность:</span>
+            <span class="duration-group">
+                <input type="number" id="inp-duration-min" min="0" max="59" value="0">
+                <span class="duration-unit">мин</span>
+                <input type="number" id="inp-duration-sec" min="0" max="59" value="10">
+                <span class="duration-unit">сек</span>
+            </span>
+        </div>
+        <div class="setting-row" id="duration-sync-hint">🎧 Подстроено под длительность аудио</div>
+        <div class="setting-row">
+            <span>Скорость:</span>
+            <input type="range" id="inp-speed" min="0.1" max="1.0" step="0.1" value="1.0">
+        </div>
+        <div class="setting-row">
+            <span>Чувствительность:</span>
+            <input type="range" id="inp-sens" min="0.1" max="2.0" step="0.1" value="1.0">
+        </div>
+
+        <div id="settings-actions-grid">
+            <button class="action-btn" id="btn-add-music">🎵 Музыка</button>
+            <button class="action-btn" id="btn-add-video">🎵 из Видео</button>
+            <button class="action-btn" id="btn-fullscreen">⛶ Экран</button>
+            <button class="action-btn" id="btn-add-obj">+ PNG</button>
+            <button class="action-btn" id="btn-export-json" style="background: rgba(255, 215, 74, 0.3);">💾 Сохранить</button>
+            <button class="action-btn" id="btn-import-file" style="background: rgba(74, 158, 255, 0.3);">📂 Импорт</button>
+        </div>
+        
+        <input type="file" id="file-images" multiple accept="image/*" style="display:none;">
+        <input type="file" id="file-audio" accept="audio/*" style="display:none;">
+        <input type="file" id="file-video" accept="video/*" style="display:none;">
+        <input type="file" id="file-import" accept=".json,application/json" style="display:none;">
+    </div>
+
+<script>
+class AnimObject {
+    constructor(images, initialX = window.innerWidth / 2, initialY = window.innerHeight / 2) {
+        this.id = Math.random().toString(36).substr(2, 9);
+        this.images = images;
+        this.keys = { x: [], y: [], rotation: [], scale: [], frame: [], z: [], origin: [] };
+        this.parentId = null;
+        this.framePairs = {};
+        
+        this.setKey('x', 0, initialX);
+        this.setKey('y', 0, initialY);
+        this.setKey('rotation', 0, 0);
+        this.setKey('scale', 0, 1);
+        this.setKey('frame', 0, 0);
+        this.setKey('z', 0, zCounter++);
+        this.setKey('origin', 0, { x: 0, y: 0 }); // ориджин (ось вращения/масштаба), смещение от центра картинки, px
+    }
+
+    setKey(prop, time, value) {
+        let arr = this.keys[prop];
+        let existing = arr.find(k => Math.abs(k.time - time) < keyRecordTolerance);
+        if (existing) { existing.value = value; } 
+        else { arr.push({ time, value }); arr.sort((a, b) => a.time - b.time); }
+    }
+
+    getValue(prop, time) {
+        let arr = this.keys[prop];
+        if (arr.length === 0) return prop === 'origin' ? { x: 0, y: 0 } : 0;
+        if (arr.length === 1 || time <= arr[0].time) return arr[0].value;
+        if (time >= arr[arr.length - 1].time) return arr[arr.length - 1].value;
+
+        for (let i = 0; i < arr.length - 1; i++) {
+            if (time >= arr[i].time && time < arr[i+1].time) {
+                if (prop === 'frame' || prop === 'origin' || prop === 'z' || arr[i].hold) return arr[i].value;
+                let t = (time - arr[i].time) / (arr[i+1].time - arr[i].time);
+                return arr[i].value + (arr[i+1].value - arr[i].value) * t;
+            }
+        }
+    }
+
+    eraseKeys(prop, time, tolerance = 0.2) {
+        let arr = this.keys[prop];
+        this.keys[prop] = arr.filter(k => {
+            if (k.time === 0) return true;
+            return Math.abs(k.time - time) > tolerance;
+        });
+        if(this.keys[prop].length === 0 && prop !== 'frame' && prop !== 'z' && prop !== 'origin') {
+            this.setKey(prop, 0, prop === 'scale' ? 1 : 0);
+        }
+    }
+}
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const keysCanvas = document.getElementById('keys-canvas');
+const keysCtx = keysCanvas.getContext('2d');
+const hitCanvas = document.createElement('canvas');
+const hitCtx = hitCanvas.getContext('2d');
+
+let objects = [];
+let selectedIds = new Set();
+let duration = 10.0;
+let currentTime = 0;
+let isPlaying = false;
+let lastTimestamp = 0;
+
+let audioEl = new Audio();
+audioEl.preservesPitch = true;
+audioEl.webkitPreservesPitch = true;
+
+let cam = { x: 0, y: 0, zoom: 1 };
+let activeTool = null;
+let settingOriginMode = false;
+let pivotFirstMode = false;
+let modHeld = false;
+let modClicks = 0;
+let modClickTimer = null;
+let playbackSpeed = 1.0;
+let sensitivity = 1.0;
+let keyEraseTolerance = 0.08;
+let keyRecordTolerance = 0.033; // ~30 ключевых кадров в секунду (было ~20)
+let zCounter = 0;
+
+function getZSortedObjects(time) {
+    return [...objects].sort((a, b) => a.getValue('z', time) - b.getValue('z', time));
+}
+
+const SELECT_FLASH_T1 = 70;   // фаза "полностью прозрачный", мс
+const SELECT_FLASH_T2 = 160;  // фаза "белый", мс
+const SELECT_FLASH_T3 = 380;  // возврат к нормальному виду, мс
+const ORIGIN_FADE_MS = 2000;  // через сколько мс после выделения маркер ориджина полностью исчезает
+
+function selectObject(id) {
+    selectedIds.add(id);
+    let obj = objects.find(o => o.id === id);
+    if (obj) {
+        obj.selectFlashStart = performance.now();
+        obj.originShownAt = performance.now();
+    }
+}
+
+function showToast(msg) {
+    const el = document.getElementById('toast-msg');
+    el.innerText = msg;
+    el.classList.add('show');
+    clearTimeout(el.timer);
+    el.timer = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    let tc = document.getElementById('timeline-container');
+    keysCanvas.width = tc.clientWidth;
+    keysCanvas.height = 44;
+}
+window.addEventListener('resize', resize);
+setTimeout(resize, 100);
+
+function loop(timestamp) {
+    let dt = (timestamp - lastTimestamp) / 1000;
+    lastTimestamp = timestamp;
+
+    if (isPlaying) {
+        currentTime += dt * playbackSpeed;
+        if (currentTime > duration) {
+            currentTime = 0;
+            if (audioEl.src) playAudio();
+        }
+        updateTimelineUI();
+    }
+    render();
+    drawKeys();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+function getGlobalTransform(obj, time) {
+    let x = obj.getValue('x', time); let y = obj.getValue('y', time);
+    let rot = obj.getValue('rotation', time); let s = obj.getValue('scale', time);
+    let matrix = new DOMMatrix().translate(x, y).rotate(rot * 180 / Math.PI).scale(s, s);
+    if (obj.parentId) {
+        let parent = objects.find(o => o.id === obj.parentId);
+        if (parent) matrix = getGlobalTransform(parent, time).multiply(matrix);
+    }
+    return matrix;
+}
+
+function extractTransformFromMatrix(mat) {
+    let x = mat.e;
+    let y = mat.f;
+    let rot = Math.atan2(mat.b, mat.a);
+    let scale = Math.sqrt(mat.a * mat.a + mat.b * mat.b);
+    return { x, y, rot, scale };
+}
+
+function getObjWorldPosition(obj, time = currentTime) {
+    let mat = getGlobalTransform(obj, time);
+    let pt = mat.transformPoint(new DOMPoint(0, 0));
+    return { x: pt.x, y: pt.y };
+}
+
+function setObjWorldPosition(obj, worldX, worldY, time = currentTime) {
+    if (obj.parentId) {
+        let parentObj = objects.find(o => o.id === obj.parentId);
+        if (parentObj) {
+            let pMat = getGlobalTransform(parentObj, time);
+            let localPt = pMat.inverse().transformPoint(new DOMPoint(worldX, worldY));
+            obj.setKey('x', time, localPt.x);
+            obj.setKey('y', time, localPt.y);
+            return;
+        }
+    }
+    obj.setKey('x', time, worldX);
+    obj.setKey('y', time, worldY);
+}
+
+function worldToLocalDelta(parentObj, worldDx, worldDy, time) {
+    if (!parentObj) return { x: worldDx, y: worldDy };
+    let pMat = getGlobalTransform(parentObj, time);
+    let pRot = Math.atan2(pMat.b, pMat.a);
+    let pScale = Math.sqrt(pMat.a * pMat.a + pMat.b * pMat.b);
+    if (pScale === 0) return { x: 0, y: 0 };
+
+    let cosP = Math.cos(-pRot);
+    let sinP = Math.sin(-pRot);
+    return {
+        x: (worldDx * cosP - worldDy * sinP) / pScale,
+        y: (worldDx * sinP + worldDy * cosP) / pScale
+    };
+}
+
+function isDescendantOf(possibleParent, targetObj) {
+    let curr = possibleParent;
+    while (curr && curr.parentId) {
+        if (curr.parentId === targetObj.id) return true;
+        curr = objects.find(o => o.id === curr.parentId);
+    }
+    return false;
+}
+
+function setParent(childObj, parentObj) {
+    if (!childObj) return;
+    if (parentObj) {
+        let childGlobalMat = getGlobalTransform(childObj, currentTime);
+        let parentGlobalMat = getGlobalTransform(parentObj, currentTime);
+        let childLocalMat = parentGlobalMat.inverse().multiply(childGlobalMat);
+        let t = extractTransformFromMatrix(childLocalMat);
+
+        childObj.parentId = parentObj.id;
+        childObj.setKey('x', currentTime, t.x);
+        childObj.setKey('y', currentTime, t.y);
+        childObj.setKey('rotation', currentTime, t.rot);
+        childObj.setKey('scale', currentTime, t.scale);
+        showToast('Родительская связь привязана!');
+    }
+}
+
+function removeParent(childObj) {
+    if (!childObj || !childObj.parentId) return;
+    let childGlobalMat = getGlobalTransform(childObj, currentTime);
+    let t = extractTransformFromMatrix(childGlobalMat);
+
+    childObj.parentId = null;
+    childObj.setKey('x', currentTime, t.x);
+    childObj.setKey('y', currentTime, t.y);
+    childObj.setKey('rotation', currentTime, t.rot);
+    childObj.setKey('scale', currentTime, t.scale);
+    showToast('Родительская связь удалена');
+}
+
+function getOriginAt(obj, time) {
+    // Значение ориджина (смещение от центра картинки, px) на заданный момент времени.
+    // Ключи ориджина не интерполируются, как и ключи кадров - держат значение до следующего ключа.
+    let o = obj.getValue('origin', time);
+    return (o && typeof o === 'object') ? o : { x: 0, y: 0 };
+}
+
+function getOriginPixel(obj, img, time = currentTime) {
+    // Точка ориджина в пиксельных координатах картинки (0,0 = левый верхний угол картинки)
+    let o = getOriginAt(obj, time);
+    return {
+        ox: img.width / 2 + (o.x || 0),
+        oy: img.height / 2 + (o.y || 0)
+    };
+}
+
+function setOriginAtWorldPoint(obj, worldX, worldY) {
+    // Переносит ориджин (ось вращения/масштаба) объекта в точку worldX/worldY (мировые координаты),
+    // при этом визуально объект не смещается в текущий момент времени. Записывается ключом ориджина
+    // (без интерполяции - действует мгновенно, начиная с текущего времени).
+    let time = currentTime;
+    let mat = getGlobalTransform(obj, time);
+    let localClick = mat.inverse().transformPoint(new DOMPoint(worldX, worldY));
+
+    let rot = obj.getValue('rotation', time);
+    let s = obj.getValue('scale', time);
+    let cosR = Math.cos(rot), sinR = Math.sin(rot);
+    // Смещение в родительском/мировом пространстве, которым нужно скомпенсировать перенос ориджина
+    let deltaX = (localClick.x * cosR - localClick.y * sinR) * s;
+    let deltaY = (localClick.x * sinR + localClick.y * cosR) * s;
+
+    let prevOrigin = getOriginAt(obj, time);
+    obj.setKey('origin', time, {
+        x: (prevOrigin.x || 0) + localClick.x,
+        y: (prevOrigin.y || 0) + localClick.y
+    });
+
+    // Компенсация положения нужна только начиная с текущего момента времени -
+    // более ранние ключи используют старый ориджин и не должны сдвигаться,
+    // иначе объект "уедет" на участках тайм-лайна до этого момента.
+    let curX = obj.getValue('x', time);
+    let curY = obj.getValue('y', time);
+    obj.keys.x.forEach(k => { if (k.time > time + 1e-6) k.value += deltaX; });
+    obj.keys.y.forEach(k => { if (k.time > time + 1e-6) k.value += deltaY; });
+    obj.setKey('x', time, curX + deltaX);
+    obj.setKey('y', time, curY + deltaY);
+}
+
+function exitSettingOriginMode() {
+    settingOriginMode = false;
+    document.getElementById('btn-set-origin').classList.remove('active-origin');
+    document.body.classList.remove('setting-origin-mode');
+}
+
+function applyOriginAtScreenPoint(screenX, screenY) {
+    let worldX = (screenX - canvas.width/2) / cam.zoom - cam.x + canvas.width/2;
+    let worldY = (screenY - canvas.height/2) / cam.zoom - cam.y + canvas.height/2;
+    let changed = 0;
+    selectedIds.forEach(id => {
+        let obj = objects.find(o => o.id === id);
+        if (obj) { setOriginAtWorldPoint(obj, worldX, worldY); changed++; }
+    });
+    exitSettingOriginMode();
+    if (changed > 0) {
+        showToast('Ориджин обновлён!');
+        drawKeys();
+    }
+}
+
+function getScreenCenter(obj) {
+    let mat = getGlobalTransform(obj, currentTime);
+    let worldCenter = mat.transformPoint(new DOMPoint(0,0));
+    let sx = (worldCenter.x - canvas.width/2 + cam.x) * cam.zoom + canvas.width/2;
+    let sy = (worldCenter.y - canvas.height/2 + cam.y) * cam.zoom + canvas.height/2;
+    return {x: sx, y: sy};
+}
+
+function drawKeys() {
+    let w = keysCanvas.width;
+    let h = keysCanvas.height;
+    keysCtx.clearRect(0, 0, w, h);
+
+    let centerX = w / 2;
+
+    // серый фон на участках вне диапазона анимации (то, что не проигрывается: t<0 или t>duration)
+    let xStart = centerX + (0 - currentTime) * TIMELINE_SCALE;
+    let xEnd = centerX + (duration - currentTime) * TIMELINE_SCALE;
+    keysCtx.fillStyle = 'rgba(150,150,150,0.4)';
+    if (xStart > 0) keysCtx.fillRect(0, 0, Math.min(xStart, w), h);
+    if (xEnd < w) keysCtx.fillRect(Math.max(xEnd, 0), 0, w - Math.max(xEnd, 0), h);
+
+    // секундные метки-ориентиры
+    keysCtx.strokeStyle = 'rgba(255,255,255,0.08)';
+    keysCtx.lineWidth = 1;
+    let firstSec = Math.floor(currentTime - centerX / TIMELINE_SCALE) - 1;
+    let lastSec = Math.ceil(currentTime + (w - centerX) / TIMELINE_SCALE) + 1;
+    for (let s = Math.max(0, firstSec); s <= lastSec; s++) {
+        let x = Math.round(centerX + (s - currentTime) * TIMELINE_SCALE) + 0.5;
+        keysCtx.beginPath(); keysCtx.moveTo(x, 0); keysCtx.lineTo(x, h); keysCtx.stroke();
+    }
+
+    // границы начала/конца проекта
+    const drawBoundary = (t) => {
+        let x = centerX + (t - currentTime) * TIMELINE_SCALE;
+        if (x < -3 || x > w + 3) return;
+        keysCtx.fillStyle = 'rgba(255,255,255,0.5)';
+        keysCtx.fillRect(x - 1, 0, 2, h);
+    };
+    drawBoundary(0);
+    drawBoundary(duration);
+
+    if (selectedIds.size === 0) return;
+    let obj = objects.find(o => o.id === Array.from(selectedIds)[0]);
+    if (!obj) return;
+
+    let rowH = h / 4;
+    const drawRow = (keysArr, color, yIndex, outlineColor) => {
+        keysArr.forEach(k => {
+            let kx = centerX + (k.time - currentTime) * TIMELINE_SCALE;
+            if (kx < -4 || kx > w + 4) return;
+            if (outlineColor) {
+                // тонкая обводка для контраста с тёмным фоном таймлайна
+                keysCtx.strokeStyle = outlineColor;
+                keysCtx.lineWidth = 1;
+                keysCtx.strokeRect(kx - 2.5, yIndex * rowH + 0.5, 5, rowH - 1);
+            }
+            keysCtx.fillStyle = color;
+            keysCtx.fillRect(kx - 2, yIndex * rowH, 4, rowH);
+            if (k.hold) {
+                // ключ без интерполяции к следующему - белая рамка
+                keysCtx.strokeStyle = '#ffffff';
+                keysCtx.lineWidth = 1;
+                keysCtx.strokeRect(kx - 3.5, yIndex * rowH + 1, 7, rowH - 2);
+            }
+        });
+    };
+
+    drawRow(obj.keys.x, '#ff4a4a', 0);                          // Движение
+    drawRow(obj.keys.rotation, '#4aff75', 1);                   // Вращение
+    drawRow(obj.keys.scale, '#4a9eff', 2);                      // Масштаб
+    drawRow(obj.keys.z || [], '#9a9a9a', 3);                    // Слой Z (серые)
+    drawRow(obj.keys.origin || [], '#000000', 3, '#ffffff');    // Ориджин (чёрные, с белой обводкой)
+    drawRow(obj.keys.frame, '#ffffff', 3);                      // Кадры (белые, поверх серых)
+}
+
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(canvas.width/2, canvas.height/2);
+    ctx.scale(cam.zoom, cam.zoom);
+    ctx.translate(-canvas.width/2 + cam.x, -canvas.height/2 + cam.y);
+
+    let nowTs = performance.now();
+    for (let obj of getZSortedObjects(currentTime)) {
+        let mat = getGlobalTransform(obj, currentTime);
+        let frameIdx = Math.floor(obj.getValue('frame', currentTime));
+        let img = obj.images[frameIdx] || obj.images[0];
+        
+        ctx.save();
+        ctx.transform(mat.a, mat.b, mat.c, mat.d, mat.e, mat.f);
+
+        let flashElapsed = (obj.selectFlashStart !== undefined) ? (nowTs - obj.selectFlashStart) : null;
+        if (flashElapsed !== null && flashElapsed >= SELECT_FLASH_T3) {
+            obj.selectFlashStart = undefined;
+            flashElapsed = null;
+        }
+
+        if (img && img.complete) {
+            let {ox, oy} = getOriginPixel(obj, img);
+            if (flashElapsed === null) {
+                ctx.drawImage(img, -ox, -oy);
+            } else if (flashElapsed < SELECT_FLASH_T1) {
+                // быстрая фаза: объект полностью прозрачный - не рисуем
+            } else if (flashElapsed < SELECT_FLASH_T2) {
+                // фаза: объект полностью белый
+                ctx.filter = 'brightness(0) invert(1)';
+                ctx.drawImage(img, -ox, -oy);
+                ctx.filter = 'none';
+            } else {
+                // фаза: плавный переход от белого к нормальному виду
+                let t = (flashElapsed - SELECT_FLASH_T2) / (SELECT_FLASH_T3 - SELECT_FLASH_T2);
+                ctx.drawImage(img, -ox, -oy);
+                ctx.filter = 'brightness(0) invert(1)';
+                ctx.globalAlpha = 1 - t;
+                ctx.drawImage(img, -ox, -oy);
+                ctx.filter = 'none';
+                ctx.globalAlpha = 1;
+            }
+        }
+        ctx.restore();
+    }
+    ctx.restore();
+
+    // Маркер ориджина (оси вращения/масштаба) для выделенных объектов
+    if (selectedIds.size > 0) {
+        // во время взаимодействия с объектом (перемещение/поворот/масштаб) маркер не показываем
+        let interactingWithObject = touchState.isDragging || (twoFingerMoveMode && twoFingerState.active);
+
+        selectedIds.forEach(id => {
+            let obj = objects.find(o => o.id === id);
+            if (!obj) return;
+
+            let alpha;
+            if (settingOriginMode) {
+                alpha = 1; // в режиме задания ориджина маркер всегда виден
+            } else if (interactingWithObject) {
+                alpha = 0;
+            } else {
+                let elapsed = (obj.originShownAt !== undefined) ? (nowTs - obj.originShownAt) : ORIGIN_FADE_MS;
+                alpha = Math.max(0, 1 - elapsed / ORIGIN_FADE_MS);
+            }
+            if (alpha <= 0) return;
+
+            let p = getScreenCenter(obj);
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            let markColor = settingOriginMode ? '#ffd74a' : 'rgba(255,255,255,0.9)';
+
+            // чёрная обводка креста (рисуется под цветными линиями)
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(p.x - 11, p.y); ctx.lineTo(p.x + 11, p.y);
+            ctx.moveTo(p.x, p.y - 11); ctx.lineTo(p.x, p.y + 11);
+            ctx.stroke();
+
+            // сам крест поверх обводки
+            ctx.strokeStyle = markColor;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(p.x - 11, p.y); ctx.lineTo(p.x + 11, p.y);
+            ctx.moveTo(p.x, p.y - 11); ctx.lineTo(p.x, p.y + 11);
+            ctx.stroke();
+
+            // центральная точка с чёрной обводкой
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = markColor;
+            ctx.fill();
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#000000';
+            ctx.stroke();
+
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        });
+    }
+}
+
+function getObjectAt(x, y) {
+    let cx = (x - canvas.width/2) / cam.zoom - cam.x + canvas.width/2;
+    let cy = (y - canvas.height/2) / cam.zoom - cam.y + canvas.height/2;
+
+    let sorted = getZSortedObjects(currentTime);
+    for (let i = sorted.length - 1; i >= 0; i--) {
+        let obj = sorted[i];
+        let mat = getGlobalTransform(obj, currentTime);
+        let invMat = mat.inverse();
+        let local = invMat.transformPoint(new DOMPoint(cx, cy));
+        
+        let frameIdx = Math.floor(obj.getValue('frame', currentTime));
+        let img = obj.images[frameIdx] || obj.images[0];
+        if (!img || !img.complete) continue;
+        
+        let {ox, oy} = getOriginPixel(obj, img);
+        if (local.x >= -ox && local.x <= img.width - ox && local.y >= -oy && local.y <= img.height - oy) {
+            hitCanvas.width = 1; hitCanvas.height = 1; hitCtx.clearRect(0,0,1,1);
+            hitCtx.drawImage(img, -(local.x + ox), -(local.y + oy));
+            if (hitCtx.getImageData(0,0,1,1).data[3] >= 102) return obj;
+        }
+    }
+    return null;
+}
+
+const timelineContainer = document.getElementById('timeline-container');
+const timeDisp = document.getElementById('time-display');
+const btnPlay = document.getElementById('btn-play');
+const TIMELINE_SCALE = 70; // пикселей на секунду в прокручиваемой ленте таймлайна
+
+function updateTimelineUI() {
+    let m = Math.floor(currentTime / 60);
+    let s = Math.floor(currentTime % 60);
+    timeDisp.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+}
+
+function eraseKeysAtCurrentTime() {
+    if (!modHeld) return;
+    let prop = activeTool || 'frame';
+    if (prop === 'rotate') prop = 'rotation';
+    if (prop === 'move') {
+        objects.filter(o => selectedIds.has(o.id)).forEach(obj => { obj.eraseKeys('x', currentTime, keyEraseTolerance); obj.eraseKeys('y', currentTime, keyEraseTolerance); });
+    } else if (prop === 'frame') {
+        // ключи Z-слоя и ориджина удаляются вместе с ключами кадров объекта
+        objects.filter(o => selectedIds.has(o.id)).forEach(obj => {
+            obj.eraseKeys('frame', currentTime, keyEraseTolerance);
+            obj.eraseKeys('z', currentTime, keyEraseTolerance);
+            obj.eraseKeys('origin', currentTime, keyEraseTolerance);
+        });
+    } else {
+        objects.filter(o => selectedIds.has(o.id)).forEach(obj => obj.eraseKeys(prop, currentTime, keyEraseTolerance));
+    }
+}
+
+let timelineDrag = { active: false, lastX: 0 };
+
+timelineContainer.addEventListener('pointerdown', (e) => {
+    timelineDrag.active = true;
+    timelineDrag.lastX = e.clientX;
+    timelineContainer.setPointerCapture(e.pointerId);
+});
+
+timelineContainer.addEventListener('pointermove', (e) => {
+    if (!timelineDrag.active) return;
+    let dx = e.clientX - timelineDrag.lastX;
+    timelineDrag.lastX = e.clientX;
+    if (dx === 0) return;
+
+    currentTime -= dx / TIMELINE_SCALE;
+    currentTime = Math.max(0, Math.min(duration, currentTime));
+    updateTimelineUI();
+    if (isPlaying && audioEl.src && isFinite(audioEl.duration)) {
+        audioEl.currentTime = currentTime % audioEl.duration;
+    }
+    eraseKeysAtCurrentTime();
+});
+
+function endTimelineDrag() {
+    timelineDrag.active = false;
+}
+timelineContainer.addEventListener('pointerup', endTimelineDrag);
+timelineContainer.addEventListener('pointercancel', endTimelineDrag);
+timelineContainer.addEventListener('pointerleave', endTimelineDrag);
+
+function togglePlay() {
+    isPlaying = !isPlaying;
+    btnPlay.innerText = isPlaying ? '⏸' : '▶';
+    document.body.classList.toggle('playing', isPlaying);
+    if(isPlaying) playAudio(); else stopAudio();
+}
+
+btnPlay.addEventListener('click', togglePlay);
+
+document.getElementById('stop-zone').addEventListener('pointerup', (e) => { e.preventDefault(); if (isPlaying) togglePlay(); });
+
+const settingsModal = document.getElementById('settings-modal');
+const modalOverlay = document.getElementById('modal-overlay');
+
+function toggleSettings(show) {
+    if (show === undefined) show = !settingsModal.classList.contains('show');
+    settingsModal.classList.toggle('show', show);
+    modalOverlay.classList.toggle('show', show);
+}
+
+document.getElementById('btn-settings').addEventListener('click', () => toggleSettings());
+modalOverlay.addEventListener('pointerdown', () => toggleSettings(false));
+
+function updateDurationInputs() {
+    let m = Math.floor(duration / 60);
+    let s = Math.floor(duration % 60);
+    document.getElementById('inp-duration-min').value = m;
+    document.getElementById('inp-duration-sec').value = s;
+}
+function applyDurationFromInputs() {
+    let m = parseInt(document.getElementById('inp-duration-min').value, 10);
+    let s = parseInt(document.getElementById('inp-duration-sec').value, 10);
+    if (isNaN(m) || m < 0) m = 0;
+    if (isNaN(s) || s < 0) s = 0;
+    if (s > 59) s = 59;
+    let newDuration = m * 60 + s;
+    duration = newDuration > 0 ? newDuration : 1;
+    updateDurationInputs();
+    document.getElementById('duration-sync-hint').classList.remove('show');
+}
+document.getElementById('inp-duration-min').addEventListener('change', applyDurationFromInputs);
+document.getElementById('inp-duration-sec').addEventListener('change', applyDurationFromInputs);
+document.getElementById('inp-speed').addEventListener('input', (e) => {
+    playbackSpeed = Math.min(1.0, parseFloat(e.target.value));
+    if (audioEl) {
+        audioEl.playbackRate = playbackSpeed;
+        audioEl.preservesPitch = true;
+        audioEl.webkitPreservesPitch = true;
+    }
+});
+document.getElementById('inp-sens').addEventListener('input', (e) => sensitivity = parseFloat(e.target.value));
+document.getElementById('btn-fullscreen').addEventListener('click', () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+});
+document.getElementById('btn-z-up').addEventListener('click', () => {
+    if(selectedIds.size !== 1) return;
+    let id = Array.from(selectedIds)[0];
+    let obj = objects.find(o => o.id === id);
+    if (!obj) return;
+    let sorted = getZSortedObjects(currentTime);
+    let idx = sorted.findIndex(o => o.id === id);
+    if (idx < sorted.length - 1) {
+        let neighbor = sorted[idx + 1];
+        let zA = obj.getValue('z', currentTime);
+        let zB = neighbor.getValue('z', currentTime);
+        obj.setKey('z', currentTime, zB);
+        neighbor.setKey('z', currentTime, zA);
+        drawKeys();
+    }
+});
+document.getElementById('btn-z-down').addEventListener('click', () => {
+    if(selectedIds.size !== 1) return;
+    let id = Array.from(selectedIds)[0];
+    let obj = objects.find(o => o.id === id);
+    if (!obj) return;
+    let sorted = getZSortedObjects(currentTime);
+    let idx = sorted.findIndex(o => o.id === id);
+    if (idx > 0) {
+        let neighbor = sorted[idx - 1];
+        let zA = obj.getValue('z', currentTime);
+        let zB = neighbor.getValue('z', currentTime);
+        obj.setKey('z', currentTime, zB);
+        neighbor.setKey('z', currentTime, zA);
+        drawKeys();
+    }
+});
+
+const extraFlyout = document.getElementById('extra-flyout');
+const btnExtraMenu = document.getElementById('btn-extra-menu');
+let extraMenuOpen = false;
+btnExtraMenu.addEventListener('click', () => {
+    extraMenuOpen = !extraMenuOpen;
+    extraFlyout.classList.toggle('open', extraMenuOpen);
+    btnExtraMenu.textContent = extraMenuOpen ? '<' : '>';
+});
+
+const btnSetOrigin = document.getElementById('btn-set-origin');
+btnSetOrigin.addEventListener('click', () => {
+    if (!settingOriginMode && selectedIds.size === 0) {
+        showToast('Сначала выделите объект(ы)!');
+        return;
+    }
+    settingOriginMode = !settingOriginMode;
+    btnSetOrigin.classList.toggle('active-origin', settingOriginMode);
+    document.body.classList.toggle('setting-origin-mode', settingOriginMode);
+    showToast(settingOriginMode ? 'Нажмите на место для нового ориджина' : 'Отменено');
+});
+
+const btnPivotMode = document.getElementById('btn-pivot-mode');
+btnPivotMode.addEventListener('click', () => {
+    pivotFirstMode = !pivotFirstMode;
+    btnPivotMode.classList.toggle('active-pivot', pivotFirstMode);
+    btnPivotMode.textContent = pivotFirstMode ? '○⊕' : '⊕⊕';
+    showToast(pivotFirstMode ? 'Трансформация относительно ориджина первого выделенного' : 'Трансформация относительно индивидуальных ориджинов');
+});
+
+let twoFingerMoveMode = false;
+let twoFingerState = { active: false, lastAngle: 0, lastCenter: { x: 0, y: 0 } };
+const btnTwoFinger = document.getElementById('btn-two-finger');
+btnTwoFinger.addEventListener('click', () => {
+    twoFingerMoveMode = !twoFingerMoveMode;
+    btnTwoFinger.classList.toggle('active-2f', twoFingerMoveMode);
+    showToast(twoFingerMoveMode ? 'Перемещение двумя пальцами: вкл' : 'Перемещение двумя пальцами: выкл');
+});
+
+function setTool(toolName) {
+    activeTool = activeTool === toolName ? null : toolName;
+    document.querySelectorAll('.tool-btn:not(#btn-mod)').forEach(b => b.className = 'tool-btn');
+    if (activeTool) document.getElementById(`btn-${activeTool}`).classList.add(`active-${activeTool}`);
+}
+const MODE_PROPS = { move: ['x', 'y'], rotate: ['rotation'], scale: ['scale'] };
+const HOLD_PRESS_MS = 450;
+
+function markPreviousKeyAsHold(toolName) {
+    let props = MODE_PROPS[toolName];
+    if (!props || selectedIds.size === 0) {
+        showToast('Сначала выделите объект(ы)!');
+        return;
+    }
+    let resultState = null;
+    objects.filter(o => selectedIds.has(o.id)).forEach(obj => {
+        props.forEach(prop => {
+            let arr = obj.keys[prop];
+            if (!arr || arr.length === 0) return;
+            // ищем ближайший ключ на текущем времени или раньше него
+            let idx = -1;
+            for (let i = 0; i < arr.length; i++) {
+                if (arr[i].time <= currentTime + 1e-6) idx = i; else break;
+            }
+            if (idx === -1) idx = 0;
+            arr[idx].hold = !arr[idx].hold;
+            if (resultState === null) resultState = arr[idx].hold;
+        });
+    });
+    if (resultState !== null) {
+        drawKeys();
+        showToast(resultState ? 'Без интерполяции: объект прыгнет к следующему ключу' : 'Интерполяция ключа восстановлена');
+        if (navigator.vibrate) { try { navigator.vibrate(30); } catch(err) {} }
+    }
+}
+
+function setupModeButton(id, toolName) {
+    const btn = document.getElementById(id);
+    let pressTimer = null;
+    let longFired = false;
+
+    function down(e) {
+        longFired = false;
+        clearTimeout(pressTimer);
+        pressTimer = setTimeout(() => {
+            longFired = true;
+            markPreviousKeyAsHold(toolName);
+        }, HOLD_PRESS_MS);
+    }
+    function up(e) {
+        clearTimeout(pressTimer);
+        if (!longFired) setTool(toolName);
+    }
+    function cancel(e) {
+        clearTimeout(pressTimer);
+    }
+    btn.addEventListener('pointerdown', down);
+    btn.addEventListener('pointerup', up);
+    btn.addEventListener('pointercancel', cancel);
+}
+setupModeButton('btn-move', 'move');
+setupModeButton('btn-rotate', 'rotate');
+setupModeButton('btn-scale', 'scale');
+
+const btnMod = document.getElementById('btn-mod');
+
+function handleModDown(e) {
+    if (modHeld) return;
+    modHeld = true; 
+    btnMod.classList.add('active');
+    
+    if (e && e.pointerId !== undefined && btnMod.setPointerCapture) {
+        try { btnMod.setPointerCapture(e.pointerId); } catch(err) {}
+    }
+    
+    if (activeTool) {
+        let prop = activeTool === 'rotate' ? 'rotation' : activeTool;
+        objects.filter(o => selectedIds.has(o.id)).forEach(obj => {
+            if (prop === 'move') { 
+                obj.eraseKeys('x', currentTime, keyEraseTolerance); 
+                obj.eraseKeys('y', currentTime, keyEraseTolerance); 
+            } else { 
+                obj.eraseKeys(prop, currentTime, keyEraseTolerance); 
+            }
+        });
+    }
+    
+    modClicks++; 
+    clearTimeout(modClickTimer);
+    modClickTimer = setTimeout(() => {
+        if (modClicks === 2) {
+            let arr = Array.from(selectedIds);
+            if (arr.length === 2) {
+                let parentObj = objects.find(o => o.id === arr[0]);
+                let childObj = objects.find(o => o.id === arr[1]);
+                if (parentObj && childObj && !isDescendantOf(parentObj, childObj)) {
+                    setParent(childObj, parentObj);
+                    btnMod.style.background = '#4aff75'; 
+                    setTimeout(() => btnMod.style.background = '', 300);
+                }
+            }
+        } else if (modClicks === 3) {
+            let arr = Array.from(selectedIds);
+            if (arr.length === 1) {
+                let childObj = objects.find(o => o.id === arr[0]);
+                if (childObj && childObj.parentId) {
+                    removeParent(childObj);
+                    btnMod.style.background = '#ff4a4a'; 
+                    setTimeout(() => btnMod.style.background = '', 300);
+                }
+            }
+        }
+        modClicks = 0;
+    }, 300);
+}
+
+function handleModUp(e) {
+    if (!modHeld) return;
+    modHeld = false; 
+    btnMod.classList.remove('active');
+    if (e && e.pointerId !== undefined && btnMod.releasePointerCapture) {
+        try { btnMod.releasePointerCapture(e.pointerId); } catch(err) {}
+    }
+}
+
+btnMod.addEventListener('pointerdown', handleModDown);
+btnMod.addEventListener('pointerup', handleModUp);
+btnMod.addEventListener('pointercancel', handleModUp);
+
+window.addEventListener('keydown', (e) => {
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+        return;
+    }
+
+    if (e.key === 'Shift') {
+        handleModDown();
+    } else if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+    } else if (e.code === 'KeyA') {
+        e.preventDefault();
+        setTool('move');
+    } else if (e.code === 'KeyS') {
+        e.preventDefault();
+        setTool('rotate');
+    } else if (e.code === 'KeyD') {
+        e.preventDefault();
+        setTool('scale');
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+        return;
+    }
+
+    if (e.key === 'Shift') {
+        handleModUp();
+    }
+});
+
+async function processImageAndCreateObjects(img) {
+    const W = img.width;
+    const H = img.height;
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = W;
+    tempCanvas.height = H;
+    const ctx = tempCanvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    
+    let imgData;
+    try {
+        imgData = ctx.getImageData(0, 0, W, H);
+    } catch(err) {
+        const posX = window.innerWidth / 2;
+        const posY = window.innerHeight / 2;
+        let newObj = new AnimObject([img], posX, posY);
+        objects.push(newObj);
+        selectedIds.clear();
+        selectObject(newObj.id);
+        updateTopGrid();
+        return;
+    }
+
+    const data = imgData.data;
+    const visited = new Uint8Array(W * H);
+    const islandDataList = [];
+
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const idx = y * W + x;
+            if (visited[idx] || data[idx * 4 + 3] <= 10) continue;
+
+            const queue = [x, y];
+            visited[idx] = 1;
+            
+            let minX = x, maxX = x, minY = y, maxY = y;
+            const componentPixels = [];
+
+            let head = 0;
+            while (head < queue.length) {
+                const cx = queue[head++];
+                const cy = queue[head++];
+                componentPixels.push(cx, cy);
+
+                if (cx < minX) minX = cx;
+                if (cx > maxX) maxX = cx;
+                if (cy < minY) minY = cy;
+                if (cy > maxY) maxY = cy;
+
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = cx + dx;
+                        const ny = cy + dy;
+                        if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
+                            const nIdx = ny * W + nx;
+                            if (!visited[nIdx] && data[nIdx * 4 + 3] > 10) {
+                                visited[nIdx] = 1;
+                                queue.push(nx, ny);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (componentPixels.length < 4) continue;
+
+            const subW = maxX - minX + 1;
+            const subH = maxY - minY + 1;
+
+            const subCanvas = document.createElement('canvas');
+            subCanvas.width = subW;
+            subCanvas.height = subH;
+            const subCtx = subCanvas.getContext('2d');
+            const subData = subCtx.createImageData(subW, subH);
+
+            for (let i = 0; i < componentPixels.length; i += 2) {
+                const px = componentPixels[i];
+                const py = componentPixels[i + 1];
+                const srcI = (py * W + px) * 4;
+                const dstI = ((py - minY) * subW + (px - minX)) * 4;
+
+                subData.data[dstI]     = data[srcI];
+                subData.data[dstI + 1] = data[srcI + 1];
+                subData.data[dstI + 2] = data[srcI + 2];
+                subData.data[dstI + 3] = data[srcI + 3];
+            }
+
+            subCtx.putImageData(subData, 0, 0);
+
+            islandDataList.push({
+                dataUrl: subCanvas.toDataURL(),
+                offsetX: (minX + subW / 2) - W / 2,
+                offsetY: (minY + subH / 2) - H / 2
+            });
+        }
+    }
+
+    if (islandDataList.length === 0) {
+        const posX = window.innerWidth / 2;
+        const posY = window.innerHeight / 2;
+        let newObj = new AnimObject([img], posX, posY);
+        objects.push(newObj);
+        selectedIds.clear();
+        selectObject(newObj.id);
+        updateTopGrid();
+        return;
+    }
+
+    for (const item of islandDataList) {
+        const islandImg = new Image();
+        await new Promise((res) => {
+            islandImg.onload = res;
+            islandImg.src = item.dataUrl;
+        });
+
+        const posX = window.innerWidth / 2 + item.offsetX;
+        const posY = window.innerHeight / 2 + item.offsetY;
+
+        objects.push(new AnimObject([islandImg], posX, posY));
+    }
+}
+
+document.getElementById('btn-add-obj').addEventListener('click', () => document.getElementById('file-images').click());
+
+document.getElementById('file-images').addEventListener('change', async (e) => {
+    let files = Array.from(e.target.files); 
+    if (files.length === 0) return;
+
+    if (files.length === 1) {
+        let reader = new FileReader();
+        reader.onload = (ev) => {
+            let img = new Image();
+            img.onload = () => {
+                processImageAndCreateObjects(img);
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(files[0]);
+    } else {
+        let loadPromises = files.map(file => {
+            return new Promise((resolve) => {
+                let reader = new FileReader();
+                reader.onload = (ev) => {
+                    let img = new Image();
+                    img.onload = () => resolve(img);
+                    img.src = ev.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+
+        let loadedImages = await Promise.all(loadPromises);
+        if (loadedImages.length > 0) {
+            let newObj = new AnimObject(loadedImages, window.innerWidth / 2, window.innerHeight / 2);
+            objects.push(newObj);
+            selectedIds.clear();
+            selectObject(newObj.id);
+            updateTopGrid();
+        }
+    }
+    e.target.value = '';
+});
+
+document.getElementById('btn-merge-frame').addEventListener('click', () => {
+    let selectedArr = Array.from(selectedIds);
+    if (selectedArr.length < 2) {
+        showToast('Выделите как минимум 2 объекта!');
+        return;
+    }
+
+    let targetId = selectedArr[0];
+    let sourceId = selectedArr[1];
+
+    let targetObj = objects.find(o => o.id === targetId);
+    let sourceObj = objects.find(o => o.id === sourceId);
+
+    if (targetObj && sourceObj) {
+        targetObj.images.push(...sourceObj.images);
+
+        objects.forEach(o => {
+            if (o.parentId === sourceId) {
+                setParent(o, targetObj);
+            }
+        });
+
+        objects = objects.filter(o => o.id !== sourceId);
+
+        selectedIds.clear();
+        selectObject(targetId);
+
+        updateTopGrid();
+        showToast('Кадры объединены');
+    }
+});
+
+function updateTopGrid() {
+    const grid = document.getElementById('top-grid');
+    if (selectedIds.size === 1) {
+        let obj = objects.find(o => o.id === Array.from(selectedIds)[0]);
+        if (!obj.framePairs) obj.framePairs = {};
+        grid.innerHTML = '';
+        obj.images.forEach((img, idx) => {
+            let wrap = document.createElement('div');
+            wrap.className = 'grid-item-wrap';
+            let el = document.createElement('img'); 
+            el.src = img.src; 
+            el.className = 'grid-item';
+            el.draggable = false;
+            el.setAttribute('draggable', 'false');
+            el.addEventListener('dragstart', (e) => e.preventDefault());
+            wrap.appendChild(el);
+
+            if (obj.framePairs.hasOwnProperty(idx)) {
+                el.classList.add('paired');
+                let badge = document.createElement('span');
+                badge.className = 'pair-badge'; 
+                badge.textContent = '⇄';
+                wrap.appendChild(badge);
+
+                let pairedIdx = obj.framePairs[idx];
+                el.addEventListener('pointerdown', (e) => {
+                    e.preventDefault();
+                    obj.setKey('frame', currentTime, pairedIdx);
+                    updateTopGridActive(Math.floor(obj.getValue('frame', currentTime)));
+                });
+                let release = () => {
+                    obj.setKey('frame', currentTime, idx);
+                    updateTopGridActive(Math.floor(obj.getValue('frame', currentTime)));
+                };
+                el.addEventListener('pointerup', release);
+                el.addEventListener('pointerleave', release);
+            } else {
+                el.addEventListener('pointerdown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (modHeld) {
+                        let activeIdx = Math.floor(obj.getValue('frame', currentTime));
+                        if (activeIdx !== idx) {
+                            obj.framePairs[activeIdx] = idx;
+                            showToast('Кадры сдвоены!');
+                            updateTopGrid();
+                            return;
+                        }
+                    }
+                    obj.setKey('frame', currentTime, idx);
+                    updateTopGridActive(idx);
+                });
+            }
+            grid.appendChild(wrap);
+        });
+        grid.classList.add('visible');
+        updateTopGridActive(Math.floor(obj.getValue('frame', currentTime)));
+    } else {
+        grid.classList.remove('visible');
+    }
+}
+function updateTopGridActive(idx) {
+    document.querySelectorAll('.grid-item').forEach((el, i) => el.classList.toggle('active', i === idx));
+}
+
+let touchState = {
+    isDragging: false, isPanning: false,
+    startX: 0, startY: 0, 
+    startObjVals: {},
+    objScreenCenter: {x:0, y:0}, lastAngle: 0,
+    touchDownX: 0, touchDownY: 0, hasMoved: false,
+    isMultiTouch: false
+};
+
+let initialPinchDist = 0;
+let initialPinchCenter = { x: 0, y: 0 };
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    let zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    let oldZoom = cam.zoom;
+    let newZoom = Math.max(0.1, Math.min(oldZoom * zoomFactor, 10));
+    
+    let mouseX = e.clientX;
+    let mouseY = e.clientY;
+    
+    cam.x += (mouseX - canvas.width / 2) / newZoom - (mouseX - canvas.width / 2) / oldZoom;
+    cam.y += (mouseY - canvas.height / 2) / newZoom - (mouseY - canvas.height / 2) / oldZoom;
+    cam.zoom = newZoom;
+}, { passive: false });
+
+canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 1 || e.button === 2) {
+        touchState.isPanning = true;
+        touchState.startX = e.clientX;
+        touchState.startY = e.clientY;
+        return;
+    }
+
+    if (e.button === 0) {
+        let x = e.clientX;
+        let y = e.clientY;
+
+        if (settingOriginMode) {
+            applyOriginAtScreenPoint(x, y);
+            return;
+        }
+
+        touchState.startX = x;
+        touchState.startY = y;
+        touchState.hasMoved = false;
+
+        let clickedObj = getObjectAt(x, y);
+
+        if (activeTool && selectedIds.size > 0) {
+            touchState.isDragging = true;
+            selectedIds.forEach(id => {
+                let obj = objects.find(o => o.id === id);
+                if (obj) {
+                    let wPos = getObjWorldPosition(obj, currentTime);
+                    touchState.startObjVals[id] = {
+                        x: obj.getValue('x', currentTime), 
+                        y: obj.getValue('y', currentTime),
+                        worldX: wPos.x,
+                        worldY: wPos.y,
+                        rot: obj.getValue('rotation', currentTime), 
+                        scale: obj.getValue('scale', currentTime)
+                    };
+                }
+            });
+
+            if (activeTool === 'rotate') {
+                let pivotObj = objects.find(o => o.id === Array.from(selectedIds)[0]);
+                if (pivotObj) {
+                    touchState.objScreenCenter = getScreenCenter(pivotObj);
+                    touchState.lastAngle = Math.atan2(y - touchState.objScreenCenter.y, x - touchState.objScreenCenter.x);
+                }
+            }
+        } else if (clickedObj) {
+            if (modHeld) {
+                if (selectedIds.has(clickedObj.id)) selectedIds.delete(clickedObj.id);
+                else selectObject(clickedObj.id);
+            } else {
+                selectedIds.clear();
+                selectObject(clickedObj.id);
+            }
+            updateTopGrid();
+        } else if (!modHeld) {
+            selectedIds.clear();
+            updateTopGrid();
+        }
+    }
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (touchState.isPanning) {
+        let dx = e.clientX - touchState.startX;
+        let dy = e.clientY - touchState.startY;
+        cam.x += dx / cam.zoom;
+        cam.y += dy / cam.zoom;
+        touchState.startX = e.clientX;
+        touchState.startY = e.clientY;
+        return;
+    }
+
+    if (touchState.isDragging && activeTool) {
+        let x = e.clientX;
+        let y = e.clientY;
+
+        if (activeTool === 'rotate') {
+            let currentAngle = Math.atan2(y - touchState.objScreenCenter.y, x - touchState.objScreenCenter.x);
+            let deltaAngle = currentAngle - touchState.lastAngle;
+            
+            while (deltaAngle > Math.PI) deltaAngle -= Math.PI * 2;
+            while (deltaAngle < -Math.PI) deltaAngle += Math.PI * 2;
+
+            let alpha = deltaAngle * sensitivity;
+            let firstObj = pivotFirstMode ? objects.find(o => o.id === Array.from(selectedIds)[0]) : null;
+            let pivotPos = firstObj ? getObjWorldPosition(firstObj, currentTime) : null;
+
+            selectedIds.forEach(id => {
+                let obj = objects.find(o => o.id === id);
+                if (obj) {
+                    let curRot = obj.getValue('rotation', currentTime);
+                    obj.setKey('rotation', currentTime, curRot + alpha);
+
+                    if (firstObj && pivotPos) {
+                        let wPos = getObjWorldPosition(obj, currentTime);
+                        let vx = wPos.x - pivotPos.x;
+                        let vy = wPos.y - pivotPos.y;
+                        let cosA = Math.cos(alpha);
+                        let sinA = Math.sin(alpha);
+                        let newWx = pivotPos.x + (vx * cosA - vy * sinA);
+                        let newWy = pivotPos.y + (vx * sinA + vy * cosA);
+                        setObjWorldPosition(obj, newWx, newWy, currentTime);
+                    }
+                }
+            });
+            touchState.lastAngle = currentAngle;
+        } else {
+            let dx = (x - touchState.startX) * sensitivity; 
+            let dy = (y - touchState.startY) * sensitivity;
+
+            let firstObj = pivotFirstMode ? objects.find(o => o.id === Array.from(selectedIds)[0]) : null;
+            let firstStart = firstObj ? touchState.startObjVals[firstObj.id] : null;
+
+            selectedIds.forEach(id => {
+                let obj = objects.find(o => o.id === id);
+                if (obj) {
+                    let startVals = touchState.startObjVals[id];
+                    if (activeTool === 'move') {
+                        let worldDx = dx / cam.zoom;
+                        let worldDy = dy / cam.zoom;
+
+                        if (obj.parentId) {
+                            let parentObj = objects.find(o => o.id === obj.parentId);
+                            let localDelta = worldToLocalDelta(parentObj, worldDx, worldDy, currentTime);
+                            obj.setKey('x', currentTime, startVals.x + localDelta.x);
+                            obj.setKey('y', currentTime, startVals.y + localDelta.y);
+                        } else {
+                            obj.setKey('x', currentTime, startVals.x + worldDx);
+                            obj.setKey('y', currentTime, startVals.y + worldDy);
+                        }
+                    }
+                    else if (activeTool === 'scale') {
+                        let s = Math.max(0.01, startVals.scale * Math.exp(-dy * 0.0022));
+                        obj.setKey('scale', currentTime, s);
+
+                        if (firstObj && firstStart && startVals) {
+                            let k = s / startVals.scale;
+                            let newWx = firstStart.worldX + (startVals.worldX - firstStart.worldX) * k;
+                            let newWy = firstStart.worldY + (startVals.worldY - firstStart.worldY) * k;
+                            setObjWorldPosition(obj, newWx, newWy, currentTime);
+                        }
+                    }
+                }
+            });
+        }
+    }
+});
+
+window.addEventListener('mouseup', () => {
+    touchState.isDragging = false;
+    touchState.isPanning = false;
+});
+
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+
+    if (e.targetTouches.length > 1) {
+        touchState.isMultiTouch = true;
+        touchState.isDragging = false;
+    }
+
+    if (e.targetTouches.length === 2) {
+        touchState.isDragging = false;
+        let t1 = e.targetTouches[0]; let t2 = e.targetTouches[1];
+        let dx = t1.clientX - t2.clientX; let dy = t1.clientY - t2.clientY;
+        initialPinchDist = Math.hypot(dx, dy);
+        initialPinchCenter = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+
+        if (twoFingerMoveMode && selectedIds.size > 0) {
+            twoFingerState.active = true;
+            twoFingerState.lastAngle = Math.atan2(dy, dx);
+            twoFingerState.lastCenter = { ...initialPinchCenter };
+        } else {
+            twoFingerState.active = false;
+        }
+        return;
+    }
+
+    if (e.targetTouches.length === 1 && !touchState.isMultiTouch) {
+        let x = e.targetTouches[0].clientX; let y = e.targetTouches[0].clientY;
+
+        if (settingOriginMode) {
+            applyOriginAtScreenPoint(x, y);
+            return;
+        }
+
+        touchState.touchDownX = x;
+        touchState.touchDownY = y;
+        touchState.hasMoved = false;
+
+        if (activeTool && selectedIds.size > 0) {
+            touchState.isDragging = true; touchState.startX = x; touchState.startY = y;
+            selectedIds.forEach(id => {
+                let obj = objects.find(o => o.id === id);
+                if (obj) {
+                    let wPos = getObjWorldPosition(obj, currentTime);
+                    touchState.startObjVals[id] = {
+                        x: obj.getValue('x', currentTime), 
+                        y: obj.getValue('y', currentTime),
+                        worldX: wPos.x,
+                        worldY: wPos.y,
+                        rot: obj.getValue('rotation', currentTime), 
+                        scale: obj.getValue('scale', currentTime)
+                    };
+                }
+            });
+            if (activeTool === 'rotate') {
+                let pivotObj = objects.find(o => o.id === Array.from(selectedIds)[0]);
+                if (pivotObj) {
+                    touchState.objScreenCenter = getScreenCenter(pivotObj);
+                    touchState.lastAngle = Math.atan2(y - touchState.objScreenCenter.y, x - touchState.objScreenCenter.x);
+                }
+            }
+        }
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+
+    if (e.targetTouches.length > 1) {
+        touchState.isMultiTouch = true;
+        touchState.hasMoved = true;
+        touchState.isDragging = false;
+    }
+
+    if (e.targetTouches.length === 2) {
+        let t1 = e.targetTouches[0]; let t2 = e.targetTouches[1];
+
+        let dx = t1.clientX - t2.clientX; let dy = t1.clientY - t2.clientY;
+        let dist = Math.hypot(dx, dy);
+        let currentCenter = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+
+        if (twoFingerMoveMode && twoFingerState.active) {
+            let currentAngle = Math.atan2(dy, dx);
+            let deltaAngle = currentAngle - twoFingerState.lastAngle;
+            while (deltaAngle > Math.PI) deltaAngle -= Math.PI * 2;
+            while (deltaAngle < -Math.PI) deltaAngle += Math.PI * 2;
+
+            let worldDx = (currentCenter.x - twoFingerState.lastCenter.x) * sensitivity / cam.zoom;
+            let worldDy = (currentCenter.y - twoFingerState.lastCenter.y) * sensitivity / cam.zoom;
+
+            let alpha = deltaAngle * sensitivity;
+            let firstObj = pivotFirstMode ? objects.find(o => o.id === Array.from(selectedIds)[0]) : null;
+            let pivotPos = firstObj ? getObjWorldPosition(firstObj, currentTime) : null;
+
+            selectedIds.forEach(id => {
+                let obj = objects.find(o => o.id === id);
+                if (obj) {
+                    let curRot = obj.getValue('rotation', currentTime);
+                    obj.setKey('rotation', currentTime, curRot + alpha);
+
+                    let curX = obj.getValue('x', currentTime);
+                    let curY = obj.getValue('y', currentTime);
+                    if (obj.parentId) {
+                        let parentObj = objects.find(o => o.id === obj.parentId);
+                        let localDelta = worldToLocalDelta(parentObj, worldDx, worldDy, currentTime);
+                        obj.setKey('x', currentTime, curX + localDelta.x);
+                        obj.setKey('y', currentTime, curY + localDelta.y);
+                    } else {
+                        obj.setKey('x', currentTime, curX + worldDx);
+                        obj.setKey('y', currentTime, curY + worldDy);
+                    }
+
+                    if (firstObj && pivotPos) {
+                        let wPos = getObjWorldPosition(obj, currentTime);
+                        let vx = wPos.x - pivotPos.x;
+                        let vy = wPos.y - pivotPos.y;
+                        let cosA = Math.cos(alpha);
+                        let sinA = Math.sin(alpha);
+                        let newWx = pivotPos.x + (vx * cosA - vy * sinA);
+                        let newWy = pivotPos.y + (vx * sinA + vy * cosA);
+                        setObjWorldPosition(obj, newWx, newWy, currentTime);
+                    }
+                }
+            });
+
+            twoFingerState.lastAngle = currentAngle;
+            twoFingerState.lastCenter = currentCenter;
+            initialPinchDist = dist;
+            initialPinchCenter = currentCenter;
+            return;
+        }
+
+        if (initialPinchDist > 0) {
+            let scaleDiff = dist / initialPinchDist;
+            let oldZoom = cam.zoom;
+            let newZoom = oldZoom * scaleDiff;
+
+            newZoom = Math.max(0.1, Math.min(newZoom, 10));
+
+            cam.x += (currentCenter.x - canvas.width / 2) / newZoom - (currentCenter.x - canvas.width / 2) / oldZoom;
+            cam.y += (currentCenter.y - canvas.height / 2) / newZoom - (currentCenter.y - canvas.height / 2) / oldZoom;
+            cam.zoom = newZoom;
+        }
+
+        let deltaX = currentCenter.x - initialPinchCenter.x;
+        let deltaY = currentCenter.y - initialPinchCenter.y;
+
+        cam.x += deltaX / cam.zoom;
+        cam.y += deltaY / cam.zoom;
+
+        initialPinchDist = dist;
+        initialPinchCenter = currentCenter;
+        return;
+    }
+
+    if (e.targetTouches.length === 1 && !touchState.isMultiTouch) {
+        let x = e.targetTouches[0].clientX; let y = e.targetTouches[0].clientY;
+
+        if (Math.hypot(x - touchState.touchDownX, y - touchState.touchDownY) > 6) {
+            touchState.hasMoved = true;
+        }
+
+        if (touchState.isDragging && activeTool) {
+            if (activeTool === 'rotate') {
+                let currentAngle = Math.atan2(y - touchState.objScreenCenter.y, x - touchState.objScreenCenter.x);
+                let deltaAngle = currentAngle - touchState.lastAngle;
+                
+                while (deltaAngle > Math.PI) deltaAngle -= Math.PI * 2;
+                while (deltaAngle < -Math.PI) deltaAngle += Math.PI * 2;
+
+                let alpha = deltaAngle * sensitivity;
+                let firstObj = pivotFirstMode ? objects.find(o => o.id === Array.from(selectedIds)[0]) : null;
+                let pivotPos = firstObj ? getObjWorldPosition(firstObj, currentTime) : null;
+
+                selectedIds.forEach(id => {
+                    let obj = objects.find(o => o.id === id);
+                    if (obj) {
+                        let curRot = obj.getValue('rotation', currentTime);
+                        obj.setKey('rotation', currentTime, curRot + alpha);
+
+                        if (firstObj && pivotPos) {
+                            let wPos = getObjWorldPosition(obj, currentTime);
+                            let vx = wPos.x - pivotPos.x;
+                            let vy = wPos.y - pivotPos.y;
+                            let cosA = Math.cos(alpha);
+                            let sinA = Math.sin(alpha);
+                            let newWx = pivotPos.x + (vx * cosA - vy * sinA);
+                            let newWy = pivotPos.y + (vx * sinA + vy * cosA);
+                            setObjWorldPosition(obj, newWx, newWy, currentTime);
+                        }
+                    }
+                });
+                touchState.lastAngle = currentAngle;
+            } else {
+                let dx = (x - touchState.startX) * sensitivity; 
+                let dy = (y - touchState.startY) * sensitivity;
+
+                let firstObj = pivotFirstMode ? objects.find(o => o.id === Array.from(selectedIds)[0]) : null;
+                let firstStart = firstObj ? touchState.startObjVals[firstObj.id] : null;
+
+                selectedIds.forEach(id => {
+                    let obj = objects.find(o => o.id === id);
+                    if (obj) {
+                        let startVals = touchState.startObjVals[id];
+                        if (activeTool === 'move') {
+                            let worldDx = dx / cam.zoom;
+                            let worldDy = dy / cam.zoom;
+
+                            if (obj.parentId) {
+                                let parentObj = objects.find(o => o.id === obj.parentId);
+                                let localDelta = worldToLocalDelta(parentObj, worldDx, worldDy, currentTime);
+                                obj.setKey('x', currentTime, startVals.x + localDelta.x);
+                                obj.setKey('y', currentTime, startVals.y + localDelta.y);
+                            } else {
+                                obj.setKey('x', currentTime, startVals.x + worldDx);
+                                obj.setKey('y', currentTime, startVals.y + worldDy);
+                            }
+                        }
+                        else if (activeTool === 'scale') {
+                            let s = Math.max(0.01, startVals.scale * Math.exp(-dy * 0.0022));
+                            obj.setKey('scale', currentTime, s);
+
+                            if (firstObj && firstStart && startVals) {
+                                let k = s / startVals.scale;
+                                let newWx = firstStart.worldX + (startVals.worldX - firstStart.worldX) * k;
+                                let newWy = firstStart.worldY + (startVals.worldY - firstStart.worldY) * k;
+                                setObjWorldPosition(obj, newWx, newWy, currentTime);
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+
+    if (e.targetTouches.length === 0) {
+        if (!touchState.hasMoved && !touchState.isMultiTouch) {
+            let x = touchState.touchDownX;
+            let y = touchState.touchDownY;
+            let clickedObj = getObjectAt(x, y);
+
+            if (clickedObj) {
+                if (modHeld) {
+                    if (selectedIds.has(clickedObj.id)) selectedIds.delete(clickedObj.id);
+                    else selectObject(clickedObj.id);
+                } else {
+                    selectedIds.clear();
+                    selectObject(clickedObj.id);
+                }
+            } else {
+                if (!modHeld) {
+                    selectedIds.clear();
+                }
+            }
+            updateTopGrid();
+        }
+        touchState.isDragging = false;
+        touchState.isMultiTouch = false;
+        twoFingerState.active = false;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchcancel', () => {
+    touchState.isDragging = false;
+    touchState.isMultiTouch = false;
+    twoFingerState.active = false;
+});
+
+function loadAudioFromFile(file) {
+    if (!file) return;
+    let reader = new FileReader();
+    reader.onload = (e) => {
+        audioEl.src = e.target.result;
+        audioEl.playbackRate = playbackSpeed;
+        audioEl.preservesPitch = true;
+        audioEl.webkitPreservesPitch = true;
+        audioEl.addEventListener('loadedmetadata', function onMeta() {
+            audioEl.removeEventListener('loadedmetadata', onMeta);
+            if (audioEl.duration && isFinite(audioEl.duration)) {
+                duration = audioEl.duration;
+                updateDurationInputs();
+                document.getElementById('duration-sync-hint').classList.add('show');
+            }
+        });
+        showToast('Аудио загружено!');
+    };
+    reader.readAsDataURL(file);
+}
+
+document.getElementById('btn-add-music').addEventListener('click', () => document.getElementById('file-audio').click());
+document.getElementById('btn-add-video').addEventListener('click', () => document.getElementById('file-video').click());
+
+document.getElementById('file-audio').addEventListener('change', (e) => {
+    loadAudioFromFile(e.target.files[0]);
+});
+
+document.getElementById('file-video').addEventListener('change', (e) => {
+    loadAudioFromFile(e.target.files[0]);
+});
+
+function playAudio() {
+    if (!audioEl.src) return;
+    audioEl.playbackRate = playbackSpeed;
+    audioEl.preservesPitch = true;
+    audioEl.webkitPreservesPitch = true;
+    if (audioEl.duration && isFinite(audioEl.duration)) {
+        audioEl.currentTime = currentTime % audioEl.duration;
+    }
+    audioEl.play().catch(e => console.log(e));
+}
+
+function stopAudio() {
+    if (audioEl && !audioEl.paused) {
+        audioEl.pause();
+    }
+}
+
+function getProjectJSONData() {
+    let serializedObjects = [];
+    for (let obj of objects) {
+        let base64Images = [];
+        for (let img of obj.images) {
+            if (img.src && img.src.startsWith('data:')) {
+                base64Images.push(img.src);
+            } else if (img.complete) {
+                let c = document.createElement('canvas');
+                c.width = img.naturalWidth || img.width || 100;
+                c.height = img.naturalHeight || img.height || 100;
+                let cCtx = c.getContext('2d');
+                cCtx.drawImage(img, 0, 0);
+                base64Images.push(c.toDataURL('image/png'));
+            }
+        }
+        let o0 = getOriginAt(obj, 0);
+        serializedObjects.push({
+            id: obj.id,
+            parentId: obj.parentId,
+            keys: JSON.parse(JSON.stringify(obj.keys)),
+            framePairs: JSON.parse(JSON.stringify(obj.framePairs || {})),
+            originOffsetX: o0.x || 0, // для обратной совместимости со старыми версиями
+            originOffsetY: o0.y || 0,
+            imagesData: base64Images
+        });
+    }
+
+    return {
+        version: "2.0",
+        duration: duration,
+        playbackSpeed: playbackSpeed,
+        sensitivity: sensitivity,
+        audioData: audioEl.src || null,
+        objects: serializedObjects
+    };
+}
+
+async function exportProjectJSON() {
+    let defaultName = `PNGanimatic_project_${Date.now()}`;
+    let fileName = prompt('Имя файла для сохранения:', defaultName);
+    if (fileName === null) return; // отмена
+    fileName = fileName.trim();
+    if (!fileName) fileName = defaultName;
+    if (!fileName.toLowerCase().endsWith('.json')) fileName += '.json';
+
+    showToast('Сохранение JSON...');
+    try {
+        let projectData = getProjectJSONData();
+        let jsonStr = JSON.stringify(projectData, null, 2);
+        let blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Проект сохранен (.json)!');
+    } catch (err) {
+        console.error(err);
+        showToast('Ошибка сохранения JSON');
+    }
+}
+
+async function loadProjectDataObject(data) {
+    if (isPlaying) togglePlay();
+    
+    duration = data.duration || 10.0;
+    playbackSpeed = Math.min(1.0, data.playbackSpeed || 1.0);
+    sensitivity = data.sensitivity || 1.0;
+    
+    updateDurationInputs();
+    document.getElementById('inp-speed').value = playbackSpeed;
+    document.getElementById('inp-sens').value = sensitivity;
+    document.getElementById('duration-sync-hint').classList.remove('show');
+
+    if (data.audioData) {
+        audioEl.src = data.audioData;
+        document.getElementById('duration-sync-hint').classList.add('show');
+    } else {
+        audioEl.removeAttribute('src');
+    }
+
+    objects = [];
+    selectedIds.clear();
+
+    if (data.objects && Array.isArray(data.objects)) {
+        for (let objData of data.objects) {
+            let loadedImages = [];
+            for (let src of objData.imagesData) {
+                let img = new Image();
+                await new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.onerror = resolve;
+                    img.src = src;
+                });
+                loadedImages.push(img);
+            }
+            let newObj = new AnimObject(loadedImages, 0, 0);
+            newObj.id = objData.id;
+            newObj.parentId = objData.parentId;
+            newObj.keys = objData.keys;
+            newObj.framePairs = objData.framePairs || {};
+            if (!Array.isArray(newObj.keys.z) || newObj.keys.z.length === 0) {
+                newObj.keys.z = [];
+                newObj.setKey('z', 0, zCounter++);
+            }
+            if (!Array.isArray(newObj.keys.origin) || newObj.keys.origin.length === 0) {
+                // старые проекты хранили ориджин как плоские originOffsetX/Y без ключей
+                newObj.keys.origin = [];
+                newObj.setKey('origin', 0, { x: objData.originOffsetX || 0, y: objData.originOffsetY || 0 });
+            }
+            objects.push(newObj);
+        }
+    }
+
+    currentTime = 0;
+    updateTimelineUI();
+    updateTopGrid();
+    drawKeys();
+    render();
+    showToast('Проект успешно загружен!');
+}
+
+document.getElementById('btn-export-json').addEventListener('click', exportProjectJSON);
+document.getElementById('btn-import-file').addEventListener('click', () => document.getElementById('file-import').click());
+
+document.getElementById('file-import').addEventListener('change', (e) => {
+    let file = e.target.files[0];
+    if (!file) return;
+
+    let reader = new FileReader();
+    reader.onload = async (ev) => {
+        let content = ev.target.result;
+        let projectData = null;
+
+        try {
+            projectData = JSON.parse(content);
+        } catch (err) {
+            console.error(err);
+        }
+
+        if (projectData && (projectData.objects || projectData.duration !== undefined)) {
+            await loadProjectDataObject(projectData);
+        } else {
+            showToast('Не удалось распознать файл проекта!');
+        }
+        e.target.value = '';
+    };
+    reader.readAsText(file);
+});
+</script>
+</body>
+</html>
